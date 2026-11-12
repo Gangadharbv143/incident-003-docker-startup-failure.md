@@ -1,0 +1,107 @@
+# Incident 003: Docker Application Startup Failure
+
+**Category:** Docker Container Troubleshooting  
+**Environment:** Ubuntu 22.04 / WSL2  
+**Image:** `devops-cicd-fixed:v1`  
+**Status:** Resolved
+
+## 1. Incident Description
+
+A Docker container exited immediately after deployment because its startup command referenced an incorrect Python application filename.
+
+## 2. Investigation Commands
+
+```bash
+docker ps -a --filter name=incident003-startup-failure
+docker logs incident003-startup-failure
+
+docker inspect incident003-startup-failure \
+--format='ExitCode={{.State.ExitCode}} Error={{.State.Error}} OOMKilled={{.State.OOMKilled}}'
+
+docker inspect incident003-startup-failure \
+--format='Path={{.Path}} Args={{json .Args}}'
+```
+
+## 3. Findings
+
+Container status:
+
+```text
+Exited (2)
+```
+
+Application error:
+
+```text
+python: can't open file '/app/missing_app.py':
+[Errno 2] No such file or directory
+```
+
+Exit details:
+
+```text
+ExitCode=2
+OOMKilled=false
+```
+
+Image inspection confirmed the actual application files:
+
+```text
+/app/
+├── app.py
+└── requirements.txt
+```
+
+## 4. Root Cause
+
+The container startup command attempted to execute `missing_app.py`, which did not exist inside the image.
+
+The correct application file was `app.py`.
+
+## 5. Recovery
+
+Removed the failed container:
+
+```bash
+docker rm incident003-startup-failure
+```
+
+Created a corrected container:
+
+```bash
+docker run -d \
+  --name incident003-fixed \
+  -p 8084:5000 \
+  devops-cicd-fixed:v1 \
+  python app.py
+```
+
+## 6. Verification
+
+```bash
+docker ps --filter name=incident003-fixed
+curl -i http://localhost:8084
+```
+
+Results:
+
+- Container status: Up
+- Port mapping: 8084 -> 5000
+- HTTP response: 200 OK
+- Application response: `CI/CD Pipeline Working!`
+
+## 7. Preventive Measures
+
+- Verify application filenames before deployment.
+- Validate Docker startup commands.
+- Test images before deployment.
+- Inspect container logs when containers exit.
+- Use automated deployment checks.
+
+## 8. Key Learning
+
+A container can exit immediately when its application startup command references a nonexistent file.
+
+Docker logs, inspect commands and image inspection help identify startup failures.
+
+**Outcome:** Successfully reproduced, investigated and resolved in a local lab simulation.
